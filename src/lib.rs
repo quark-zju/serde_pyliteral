@@ -1,0 +1,14 @@
+pub mod de;
+pub mod error;
+pub mod ser;
+mod unicode;
+
+#[cfg(test)]
+mod tests;
+
+pub use error::Error;
+pub type Result<T> = std::result::Result<T, Error>;
+
+pub use ser::to_string;
+pub use ser::to_vec;
+pub use ser::to_writer;

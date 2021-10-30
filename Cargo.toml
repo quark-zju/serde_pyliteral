@@ -1,0 +1,13 @@
+[package]
+name = "serde_pyliteral"
+version = "0.1.0"
+authors = ["Jun Wu <quark@lihdd.net>"]
+edition = "2021"
+
+[dependencies]
+serde = { version = "1" }
+thiserror = "1"
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_bytes = "0.11"
