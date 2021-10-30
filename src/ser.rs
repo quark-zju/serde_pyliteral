@@ -76,6 +76,10 @@ impl<'a, W: Write> Serializer<W> {
 
     fn pop_bracket(&mut self) -> Result<()> {
         if let Some(frame) = self.stack.pop() {
+            if frame.right_bracket == b")" && frame.count == 1 {
+                // Tailing comma needed for tuple of a single item.
+                self.write_raw_bytes(b",")?;
+            }
             self.write_raw_bytes(frame.right_bracket)?;
         }
         Ok(())
