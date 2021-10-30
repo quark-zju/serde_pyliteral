@@ -9,17 +9,29 @@ use serde::ser::SerializeTuple;
 use serde::ser::SerializeTupleStruct;
 use serde::ser::SerializeTupleVariant;
 use serde::Serialize;
+use std::borrow::Cow;
 use std::io;
 use std::io::Write;
 
 pub fn to_writer<W: io::Write, T: ?Sized + Serialize>(writer: W, value: &T) -> Result<()> {
-    let mut ser = Serializer::new(writer);
+    let mut ser = Serializer::from_writer(writer);
+    value.serialize(&mut ser)
+}
+
+pub fn to_writer_pretty<W: io::Write, T: ?Sized + Serialize>(writer: W, value: &T) -> Result<()> {
+    let mut ser = Serializer::from_writer(writer).pretty();
     value.serialize(&mut ser)
 }
 
 pub fn to_vec<T: ?Sized + Serialize>(value: &T) -> Result<Vec<u8>> {
     let mut writer = Vec::with_capacity(128);
     to_writer(&mut writer, value)?;
+    Ok(writer)
+}
+
+pub fn to_vec_pretty<T: ?Sized + Serialize>(value: &T) -> Result<Vec<u8>> {
+    let mut writer = Vec::with_capacity(128);
+    to_writer_pretty(&mut writer, value)?;
     Ok(writer)
 }
 
@@ -32,24 +44,65 @@ pub fn to_string<T: ?Sized + Serialize>(value: &T) -> Result<String> {
     Ok(string)
 }
 
+pub fn to_string_pretty<T: ?Sized + Serialize>(value: &T) -> Result<String> {
+    let vec = to_vec_pretty(value)?;
+    let string = unsafe {
+        // We do not emit invalid UTF-8.
+        String::from_utf8_unchecked(vec)
+    };
+    Ok(string)
+}
+
 pub struct Serializer<W> {
     writer: W,
     written_bytes: usize,
+    writing_key: usize,
     stack: Vec<Frame>,
+    config: Config,
+}
+
+#[derive(Debug, Default)]
+pub struct Config {
+    pretty: bool,
+}
+
+impl Config {
+    pub fn pretty(mut self, value: bool) -> Self {
+        self.pretty = value;
+        self
+    }
 }
 
 struct Frame {
     count: usize,
+    indent: usize,
     right_bracket: &'static [u8],
+    key_len: usize,
 }
 
 impl<W: Write> Serializer<W> {
-    pub fn new(w: W) -> Self {
+    pub fn from_writer(w: W) -> Self {
         Serializer {
             writer: w,
             written_bytes: 0,
+            writing_key: 0,
             stack: Vec::new(),
+            config: Config::default(),
         }
+    }
+
+    pub fn pretty(mut self) -> Self {
+        self.config.pretty = true;
+        self
+    }
+
+    pub fn with_config(mut self, config: Config) -> Self {
+        self.config = config;
+        self
+    }
+
+    fn is_pretty(&self) -> bool {
+        self.config.pretty && self.writing_key == 0
     }
 }
 
@@ -67,10 +120,22 @@ impl<'a, W: Write> Serializer<W> {
         left_bracket: &'static [u8],
         right_bracket: &'static [u8],
     ) -> Result<()> {
-        self.stack.push(Frame {
+        let indent = if self.is_pretty() {
+            self.stack
+                .last()
+                .map(|f| f.indent + f.key_len)
+                .unwrap_or_default()
+                + left_bracket.len()
+        } else {
+            0
+        };
+        let frame = Frame {
             count: 0,
+            indent,
             right_bracket,
-        });
+            key_len: 0,
+        };
+        self.stack.push(frame);
         self.write_raw_bytes(left_bracket).map_err(From::from)
     }
 
@@ -86,19 +151,39 @@ impl<'a, W: Write> Serializer<W> {
     }
 
     fn write_comma(&mut self) -> Result<()> {
+        let pretty = self.is_pretty();
         if let Some(frame) = self.stack.last_mut() {
             frame.count += 1;
             if frame.count > 1 {
-                self.write_raw_bytes(b",")?;
+                if pretty {
+                    let indent = frame.indent;
+                    self.write_raw_bytes(b",\n")?;
+                    self.write_raw_bytes(&spaces(indent))?;
+                } else {
+                    self.write_raw_bytes(b",")?;
+                }
             }
         }
         Ok(())
     }
 
+    fn write_key_colon(&mut self, key: impl Serialize) -> Result<()> {
+        let pretty = self.is_pretty();
+        let orig_written_bytes = self.written_bytes;
+        // Disable pretty when writing keys.
+        self.writing_key += 1;
+        key.serialize(&mut *self)?;
+        self.write_raw_bytes(if pretty { b": " } else { b":" })?;
+        if let Some(frame) = self.stack.last_mut() {
+            frame.key_len = self.written_bytes - orig_written_bytes;
+        }
+        self.writing_key -= 1;
+        Ok(())
+    }
+
     fn push_enum_variant(&mut self, name: &str) -> Result<()> {
         self.push_bracket(b"{", b"}")?;
-        write_escaped_string(name, self).map_err(Error::from)?;
-        self.write_raw_bytes(b":")
+        self.write_key_colon(name)
     }
 }
 
@@ -371,8 +456,8 @@ impl<'a, W: Write> SerializeMap for &'a mut Serializer<W> {
 
     fn serialize_key<K: ?Sized + Serialize>(&mut self, key: &K) -> Result<()> {
         self.write_comma()?;
-        key.serialize(&mut **self)?;
-        self.write_raw_bytes(b":")
+        self.write_key_colon(key)?;
+        Ok(())
     }
 
     fn serialize_value<V: ?Sized + Serialize>(&mut self, value: &V) -> Result<()> {
@@ -394,8 +479,7 @@ impl<'a, W: Write> SerializeStruct for &'a mut Serializer<W> {
         value: &V,
     ) -> Result<()> {
         self.write_comma()?;
-        key.serialize(&mut **self)?;
-        self.write_raw_bytes(b":")?;
+        self.write_key_colon(key)?;
         value.serialize(&mut **self)
     }
 
@@ -414,8 +498,7 @@ impl<'a, W: Write> SerializeStructVariant for &'a mut Serializer<W> {
         value: &V,
     ) -> Result<()> {
         self.write_comma()?;
-        key.serialize(&mut **self)?;
-        self.write_raw_bytes(b":")?;
+        self.write_key_colon(key)?;
         value.serialize(&mut **self)
     }
 
@@ -535,11 +618,20 @@ fn write_escaped_bytes(value: &[u8], out: &mut impl io::Write) -> io::Result<()>
     out.write_all(b"\"")
 }
 
+fn spaces(n: usize) -> Cow<'static, [u8]> {
+    static SPACES: [u8; 512] = [b' '; 512];
+    match SPACES.get(..n) {
+        Some(s) => Cow::Borrowed(s),
+        None => Cow::Owned(" ".repeat(n).into_bytes()),
+    }
+}
+
 // Used to reduce small "write" calls if no escape is needed.
 struct WriteBytesState<'a> {
     value: &'a [u8],
     start: usize,
 }
+
 impl<'a> WriteBytesState<'a> {
     fn from_value(value: &'a [u8]) -> Self {
         Self { value, start: 0 }

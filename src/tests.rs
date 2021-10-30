@@ -6,6 +6,14 @@ fn s<T: ?Sized + Serialize>(v: &T) -> String {
     crate::to_string(v).unwrap()
 }
 
+fn p<T: ?Sized + Serialize>(v: &T) -> String {
+    let mut s = crate::to_string_pretty(v).unwrap();
+    if s.contains('\n') {
+        s = format!("\n{}", s);
+    }
+    s
+}
+
 fn b(bytes: &[u8]) -> ByteBuf {
     ByteBuf::from(bytes.to_vec())
 }
@@ -96,4 +104,59 @@ fn test_serialize_enum() {
     assert_eq!(s(&A::C(1, 2)), "{\"C\":(1,2)}");
     assert_eq!(s(&A::D(D)), "{\"D\":()}");
     assert_eq!(s(&A::E { a: 1, b: 2 }), "{\"E\":{\"a\":1,\"b\":2}}");
+}
+
+#[test]
+fn test_pretty() {
+    assert_eq!(p(&[1]), "(1,)");
+    assert_eq!(p(&[1, 2]), "\n(1,\n 2)");
+
+    assert_eq!(p(&vec![1]), "[1]");
+    assert_eq!(p(&vec![1, 2]), "\n[1,\n 2]");
+    assert_eq!(p(&vec![vec![1], vec![2, 2]]), "\n[[1],\n [2,\n  2]]");
+
+    let mut m = BTreeMap::new();
+    assert_eq!(p(&m), "{}");
+    m.insert(1, "a");
+    assert_eq!(p(&m), "{1: \"a\"}");
+    m.insert(222, "b");
+    assert_eq!(p(&m), "\n{1: \"a\",\n 222: \"b\"}");
+
+    let mut m = BTreeMap::new();
+    m.insert((1, (2, 4)), vec![vec![1], vec![2]]);
+    m.insert((222, (333, 0)), vec![vec![3, 4], vec![5]]);
+    assert_eq!(
+        p(&m),
+        r#"
+{(1,(2,4)): [[1],
+             [2]],
+ (222,(333,0)): [[3,
+                  4],
+                 [5]]}"#
+    );
+
+    #[derive(Serialize)]
+    struct A {
+        foo: Vec<u32>,
+        inner: Vec<A>,
+    }
+    let a = A {
+        foo: vec![],
+        inner: vec![A {
+            foo: vec![3],
+            inner: vec![A {
+                foo: vec![5, 6],
+                inner: vec![],
+            }],
+        }],
+    };
+    assert_eq!(
+        p(&a),
+        r#"
+{"foo": [],
+ "inner": [{"foo": [3],
+            "inner": [{"foo": [5,
+                               6],
+                       "inner": []}]}]}"#
+    );
 }
