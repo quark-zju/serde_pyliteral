@@ -1,4 +1,5 @@
 use crate::unicode::is_printable_or_space;
+use crate::error::unsupported;
 use crate::Error;
 use crate::Result;
 use serde::ser::SerializeMap;
@@ -197,10 +198,6 @@ impl<'a, W: Write> Write for Serializer<W> {
     fn flush(&mut self) -> io::Result<()> {
         self.writer.flush()
     }
-}
-
-fn unsupported<T>(message: &'static str) -> Result<T> {
-    Err(Error::Unsupported(message))
 }
 
 impl<'a, W: Write> serde::Serializer for &'a mut Serializer<W> {

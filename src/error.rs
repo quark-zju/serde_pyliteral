@@ -18,3 +18,13 @@ impl serde::ser::Error for Error {
         Self::Generic(msg.to_string())
     }
 }
+
+impl serde::de::Error for Error {
+    fn custom<T: fmt::Display>(msg: T) -> Self {
+        Self::Generic(msg.to_string())
+    }
+}
+
+pub(crate) fn unsupported<T>(message: &'static str) -> Result<T, Error> {
+    Err(Error::Unsupported(message))
+}
