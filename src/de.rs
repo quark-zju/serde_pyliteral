@@ -709,7 +709,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
         visitor: V,
     ) -> Result<V::Value> {
         self.debug("deserialize_tuple_struct");
-        todo!()
+        self.deserialize_tuple(len, visitor)
     }
 
     fn deserialize_map<V: Visitor<'de>>(mut self, visitor: V) -> Result<V::Value> {
@@ -723,11 +723,12 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
 
     fn deserialize_struct<V: Visitor<'de>>(
         self,
-        name: &'static str,
-        fields: &'static [&'static str],
+        _name: &'static str,
+        _fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value> {
         self.debug("deserialize_struct");
+        self.deserialize_map(visitor)
     }
 
     fn deserialize_enum<V: Visitor<'de>>(

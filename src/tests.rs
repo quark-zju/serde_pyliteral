@@ -1,4 +1,5 @@
 use serde::de;
+use serde::Deserialize;
 use serde::Serialize;
 use serde_bytes::ByteBuf;
 use serde_json::Value;
@@ -245,4 +246,48 @@ fn test_deserialize_map() {
 
     let v: BTreeMap<Vec<bool>, String> = d("{(True,):'a', (False,True):'b'}");
     assert_eq!(format!("{:?}", v), "{[false, true]: \"b\", [true]: \"a\"}");
+}
+
+#[test]
+fn test_deserialize_struct() {
+    #[derive(Deserialize, Eq, PartialEq, Debug)]
+    struct A {
+        a: i32,
+        b: bool,
+        c: String,
+        d: ByteBuf,
+        e: (u8, u8),
+        f: Option<B>,
+        g: C,
+        h: Vec<Option<D>>,
+        i: E,
+    }
+    #[derive(Deserialize, Eq, PartialEq, Debug)]
+    struct B(i32);
+    #[derive(Deserialize, Eq, PartialEq, Debug)]
+    struct C(char, Option<bool>);
+    #[derive(Deserialize, Eq, PartialEq, Debug)]
+    struct D;
+    #[derive(Deserialize, Eq, PartialEq, Debug)]
+    struct E {
+        inner: u32,
+    }
+
+    let a = A {
+        a: -10,
+        b: false,
+        c: "abc".to_string(),
+        d: b(b"123"),
+        e: (2, 5),
+        f: Some(B(0)),
+        g: C(' ', None),
+        h: vec![Some(D), None],
+        i: E { inner: 1 },
+    };
+    let b: A = d(r#"{
+        "a":-10,"b":False,"c":"abc",
+        "d":b"123","e":(2,5),"f":0,"g":(" ",None),
+        "h":[(),None],"i":{"inner":1}}
+    }"#);
+    assert_eq!(a, b);
 }
