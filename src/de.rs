@@ -3,6 +3,7 @@ use crate::peek::PeekRead;
 use crate::Error;
 use crate::Result;
 use serde::de;
+use serde::de::Deserializer as _;
 use serde::de::Visitor;
 use std::borrow::Cow;
 use std::io;
@@ -29,6 +30,7 @@ pub struct Deserializer<R> {
 struct Frame {
     right_bracket: u8,
     count: usize,
+    size_hint: Option<usize>,
 }
 
 impl<R: Read> Deserializer<R> {
@@ -349,13 +351,19 @@ impl<R: Read> Deserializer<R> {
     }
 
     /// Push a frame if bracket matches. Return true if a frame is pushed.
-    fn maybe_push_bracket(&mut self, left_bracket: u8, right_bracket: u8) -> crate::Result<bool> {
+    fn maybe_push_bracket(
+        &mut self,
+        left_bracket: u8,
+        right_bracket: u8,
+        size_hint: Option<usize>,
+    ) -> crate::Result<bool> {
         let b = self.peek_byte()?;
         if b == Some(left_bracket) {
             self.skip(1)?;
             self.stack.push(Frame {
                 right_bracket,
                 count: 0,
+                size_hint,
             });
             Ok(true)
         } else {
@@ -413,6 +421,25 @@ impl<R: Read> Deserializer<R> {
         self.maybe_pop_bracket()
     }
 
+    /// Force read till the end of a container.
+    fn force_end_container(&mut self) -> crate::Result<()> {
+        while !self.check_end_of_container()? {
+            self.deserialize_ignored_any(de::IgnoredAny)?;
+        }
+        Ok(())
+    }
+
+    fn reach_size_hint(&self) -> bool {
+        if let Some(frame) = self.stack.last() {
+            if let Some(size) = frame.size_hint {
+                if frame.count == size {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     fn debug(&mut self, label: &'static str) {
         if cfg!(test) && cfg!(debug_assertions) {
             let brackets = self
@@ -441,7 +468,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
         match self.peek_byte()?.unwrap_or(b' ') {
             b'[' => self.deserialize_seq(visitor),
             b'{' => self.deserialize_map(visitor),
-            b'(' => self.deserialize_tuple(0, visitor),
+            b'(' => self.deserialize_seq(visitor),
             b'\'' | b'"' => self.deserialize_str(visitor),
             b'b' => self.deserialize_bytes(visitor),
             b'T' | b'F' => self.deserialize_bool(visitor),
@@ -652,7 +679,10 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_seq<V: Visitor<'de>>(mut self, visitor: V) -> Result<V::Value> {
-        if self.maybe_push_bracket(b'[', b']')? || self.maybe_push_bracket(b'(', b')')? {
+        self.debug("deserialize_seq");
+        if self.maybe_push_bracket(b'[', b']', None)?
+            || self.maybe_push_bracket(b'(', b')', None)?
+        {
             visitor.visit_seq(&mut self)
         } else {
             self.type_mismatch("list")
@@ -660,7 +690,10 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_tuple<V: Visitor<'de>>(mut self, len: usize, visitor: V) -> Result<V::Value> {
-        if self.maybe_push_bracket(b'(', b')')? || self.maybe_push_bracket(b'[', b']')? {
+        self.debug("deserialize_tuple");
+        if self.maybe_push_bracket(b'(', b')', Some(len))?
+            || self.maybe_push_bracket(b'[', b']', Some(len))?
+        {
             visitor.visit_seq(&mut self)
         } else {
             self.type_mismatch("tuple")
@@ -678,7 +711,8 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_map<V: Visitor<'de>>(mut self, visitor: V) -> Result<V::Value> {
-        if self.maybe_push_bracket(b'{', b'}')? {
+        self.debug("deserialize_map");
+        if self.maybe_push_bracket(b'{', b'}', None)? {
             visitor.visit_map(&mut self)
         } else {
             self.type_mismatch("map")
@@ -734,7 +768,13 @@ impl<'de, 'a, R: Read> de::SeqAccess<'de> for &'a mut Deserializer<R> {
         if self.check_end_of_container()? {
             return Ok(None);
         }
-        seed.deserialize(&mut **self).map(Some)
+        let v = seed.deserialize(&mut **self)?;
+        if self.reach_size_hint() {
+            // If size_hint is reached, `next_element_seed` won't be called again.
+            // Need to read out the right bracket now.
+            self.force_end_container()?;
+        }
+        Ok(Some(v))
     }
 }
 
