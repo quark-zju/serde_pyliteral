@@ -59,6 +59,13 @@ impl<R: Read> Read for Deserializer<R> {
 
 // Helper methods.
 impl<R: Read> Deserializer<R> {
+    fn peek_byte(&mut self) -> crate::Result<Option<u8>> {
+        self.skip_spaces_and_comments()?;
+        let mut v = vec![0];
+        self.peek(&mut v)?;
+        Ok(v.into_iter().next())
+    }
+
     fn read_int_string(&mut self) -> crate::Result<String> {
         self.skip_spaces_and_comments()?;
         self.read_while(|b, s: &mut String| {
@@ -319,10 +326,7 @@ impl<R: Read> Deserializer<R> {
 
     /// Raise a TypeMismatch error.
     fn type_mismatch<T>(&mut self, expected: &'static str) -> Result<T> {
-        self.skip_spaces_and_comments()?;
-        let mut buf = vec![0];
-        self.reader.peek(&mut buf)?;
-        let got: Cow<str> = match buf.get(0).copied().unwrap_or(0) {
+        let got: Cow<str> = match self.peek_byte()?.unwrap_or(0) {
             0 => "eof".into(),
             b'[' => "list".into(),
             b'{' => "map".into(),
@@ -342,10 +346,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     type Error = Error;
 
     fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        self.skip_spaces_and_comments()?;
-        let mut buf = vec![0];
-        self.reader.peek(&mut buf)?;
-        match buf.get(0).copied().unwrap_or(b' ') {
+        match self.peek_byte()?.unwrap_or(b' ') {
             b'[' => self.deserialize_seq(visitor),
             b'{' => self.deserialize_map(visitor),
             b'(' => self.deserialize_tuple(0, visitor),
