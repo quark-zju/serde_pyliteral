@@ -23,12 +23,19 @@ pub fn from_str<T: de::DeserializeOwned>(s: &str) -> Result<T> {
 
 pub struct Deserializer<R> {
     reader: PeekRead<R>,
+    stack: Vec<Frame>,
+}
+
+struct Frame {
+    right_bracket: u8,
+    count: usize,
 }
 
 impl<R: Read> Deserializer<R> {
     pub fn new(reader: R) -> Self {
         Self {
             reader: PeekRead::from_reader(reader),
+            stack: Vec::new(),
         }
     }
 }
@@ -340,6 +347,57 @@ impl<R: Read> Deserializer<R> {
         };
         Err(Error::TypeMismatch(expected, got))
     }
+
+    /// Push a frame if bracket matches. Return true if a frame is pushed.
+    fn maybe_push_bracket(&mut self, left_bracket: u8, right_bracket: u8) -> crate::Result<bool> {
+        let b = self.peek_byte()?;
+        if b == Some(left_bracket) {
+            self.skip(1)?;
+            self.stack.push(Frame {
+                right_bracket,
+                count: 0,
+            });
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Pop a frame if bracket matches. Return true if the right
+    /// bracket matches.
+    fn maybe_pop_bracket(&mut self) -> crate::Result<bool> {
+        if let Some(frame) = self.stack.last() {
+            let right_bracket = frame.right_bracket;
+            if let Some(b) = self.peek_byte()? {
+                if b == right_bracket {
+                    self.stack.pop();
+                    self.skip(1)?;
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
+    /// Read "," except for the first item.
+    /// Call this before reading an item, after maybe_pop_bracket.
+    fn maybe_read_comma(&mut self) -> crate::Result<()> {
+        if let Some(frame) = self.stack.last_mut() {
+            let first = frame.count == 0;
+            frame.count += 1;
+            // Comma is needed for non-first
+            if !first {
+                let b = self.peek_byte()?;
+                dbg!(b.unwrap_or(b' ') as char);
+                if b != Some(b',') {
+                    return self.type_mismatch("comma");
+                } else {
+                    self.skip(1)?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
@@ -540,12 +598,20 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
         visitor.visit_newtype_struct(self)
     }
 
-    fn deserialize_seq<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        todo!()
+    fn deserialize_seq<V: Visitor<'de>>(mut self, visitor: V) -> Result<V::Value> {
+        if self.maybe_push_bracket(b'[', b']')? || self.maybe_push_bracket(b'(', b')')? {
+            visitor.visit_seq(&mut self)
+        } else {
+            self.type_mismatch("list")
+        }
     }
 
-    fn deserialize_tuple<V: Visitor<'de>>(self, len: usize, visitor: V) -> Result<V::Value> {
-        todo!()
+    fn deserialize_tuple<V: Visitor<'de>>(mut self, len: usize, visitor: V) -> Result<V::Value> {
+        if self.maybe_push_bracket(b'(', b')')? || self.maybe_push_bracket(b'[', b']')? {
+            visitor.visit_seq(&mut self)
+        } else {
+            self.type_mismatch("tuple")
+        }
     }
 
     fn deserialize_tuple_struct<V: Visitor<'de>>(
@@ -593,5 +659,24 @@ fn hex_to_u4(b: u8) -> Option<u8> {
         b'0'..=b'9' => Some(b - b'0'),
         b'a'..=b'f' => Some(b - b'a' + 10),
         _ => None,
+    }
+}
+
+impl<'de, 'a, R: Read> de::SeqAccess<'de> for &'a mut Deserializer<R> {
+    type Error = Error;
+
+    fn next_element_seed<T: de::DeserializeSeed<'de>>(
+        &mut self,
+        seed: T,
+    ) -> Result<Option<T::Value>> {
+        if self.maybe_pop_bracket()? {
+            return Ok(None);
+        }
+        self.maybe_read_comma()?;
+        // Check again for tailing comma.
+        if self.maybe_pop_bracket()? {
+            return Ok(None);
+        }
+        seed.deserialize(&mut **self).map(Some)
     }
 }

@@ -212,4 +212,22 @@ fn test_deserialize_any() {
 
     let v: Value = d("None");
     assert_eq!(v.to_string(), "null");
+
+    let v: Value = d("[1, True, 'abc', None]");
+    assert_eq!(v.to_string(), "[1,true,\"abc\",null]");
+
+    let v: Value = d("(1, (2, 3), (4,),)");
+    assert_eq!(v.to_string(), "[1,[2,3],[4]]");
+}
+
+#[test]
+fn test_deserialize_list() {
+    let v: [bool; 3] = d(" ( True,False, True ) ");
+    assert_eq!(v, [true, false, true]);
+
+    let v: Vec<String> = d(r#"['a',"","b"," ",]"#);
+    assert_eq!(v, ["a", "", "b", " "]);
+
+    let v: Vec<Vec<u8>> = d(r#"[[3,4,],[5],[]]"#);
+    assert_eq!(v, [vec![3, 4], vec![5], vec![]]);
 }
