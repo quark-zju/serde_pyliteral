@@ -396,7 +396,6 @@ impl<R: Read> Deserializer<R> {
             // Comma is needed for non-first
             if !first {
                 let b = self.peek_byte()?;
-                dbg!(b.unwrap_or(b' ') as char);
                 if b != Some(b',') {
                     return self.type_mismatch("comma");
                 } else {
