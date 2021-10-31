@@ -1,10 +1,27 @@
+use std::borrow::Cow;
 use std::fmt;
+use std::num::ParseIntError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("{0}")]
     Generic(String),
+
+    #[error("expect {0}, got {1}")]
+    TypeMismatch(&'static str, Cow<'static, str>),
+
+    #[error(transparent)]
+    ParseNumber(#[from] ParseIntError),
+
+    #[error("cannot parse string: {0}")]
+    ParseString(Cow<'static, str>),
+
+    #[error("cannot parse bytes: {0}")]
+    ParseBytes(Cow<'static, str>),
+
+    #[error("cannot auto-detect type: {0}")]
+    ParseAny(char),
 
     #[error("{0} is not supported")]
     Unsupported(&'static str),

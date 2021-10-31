@@ -16,3 +16,7 @@ pub use ser::to_vec;
 pub use ser::to_vec_pretty;
 pub use ser::to_writer;
 pub use ser::to_writer_pretty;
+
+pub use de::from_reader;
+pub use de::from_slice;
+pub use de::from_str;

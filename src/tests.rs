@@ -1,5 +1,7 @@
+use serde::de;
 use serde::Serialize;
 use serde_bytes::ByteBuf;
+use serde_json::Value;
 use std::collections::BTreeMap;
 
 fn s<T: ?Sized + Serialize>(v: &T) -> String {
@@ -17,6 +19,11 @@ fn p<T: ?Sized + Serialize>(v: &T) -> String {
 fn b(bytes: &[u8]) -> ByteBuf {
     ByteBuf::from(bytes.to_vec())
 }
+
+fn d<T: de::DeserializeOwned>(s: &str) -> T {
+    crate::from_str(s).unwrap()
+}
+
 #[test]
 fn test_serialize_basic_types() {
     assert_eq!(s(&42), "42");
@@ -159,4 +166,50 @@ fn test_pretty() {
                                6],
                        "inner": []}]}]}"#
     );
+}
+
+#[test]
+fn test_deserialize_basic() {
+    let v: String = d(r#"'abcd文字\0\n\t\\\uf230"'"#);
+    assert_eq!(v, "abcd文字\u{0}\n\t\\\u{f230}\"");
+
+    let v: ByteBuf = d(r#"b"\0\n\t\x12\xff123 \\\'\"\r""#);
+    assert_eq!(v, [0, 10, 9, 18, 255, 49, 50, 51, 32, 92, 39, 34, 13]);
+
+    let v: u64 = d("18446744073709551613");
+    assert_eq!(v, 18446744073709551613);
+
+    let v: i64 = d("-9223372036854775801");
+    assert_eq!(v, -9223372036854775801);
+
+    let v: Option<bool> = d("True");
+    assert_eq!(v, Some(true));
+    let v: Option<bool> = d("False");
+    assert_eq!(v, Some(false));
+    let v: Option<bool> = d("None");
+    assert_eq!(v, None);
+
+    let v: char = d("'写'");
+    assert_eq!(v, '写');
+
+    let v: () = d(" ()");
+    assert_eq!(v, ());
+}
+
+#[test]
+fn test_deserialize_any() {
+    let v: Value = d(r#"
+        # Comments are skipped.
+        # Spaces are skipped too.
+        123"#);
+    assert_eq!(v.to_string(), "123");
+
+    let v: Value = d("'abc'");
+    assert_eq!(v.to_string(), "\"abc\"");
+
+    let v: Value = d("True");
+    assert_eq!(v.to_string(), "true");
+
+    let v: Value = d("None");
+    assert_eq!(v.to_string(), "null");
 }
