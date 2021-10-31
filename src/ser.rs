@@ -1,5 +1,5 @@
-use crate::unicode::is_printable_or_space;
 use crate::error::unsupported;
+use crate::unicode::is_printable_or_space;
 use crate::Error;
 use crate::Result;
 use serde::ser::SerializeMap;
