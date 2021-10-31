@@ -398,6 +398,20 @@ impl<R: Read> Deserializer<R> {
         }
         Ok(())
     }
+
+    /// Check if we reach the end of a container. Used to implement
+    /// seq or map acess. Return true if end is reached, and the
+    /// callsite should return `None`.
+    ///
+    /// The function consumes ',' and the right-side bracket.
+    fn check_end_of_container(&mut self) -> crate::Result<bool> {
+        if self.maybe_pop_bracket()? {
+            return Ok(true);
+        }
+        self.maybe_read_comma()?;
+        // Check again after tailing comma.
+        self.maybe_pop_bracket()
+    }
 }
 
 impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
@@ -669,12 +683,7 @@ impl<'de, 'a, R: Read> de::SeqAccess<'de> for &'a mut Deserializer<R> {
         &mut self,
         seed: T,
     ) -> Result<Option<T::Value>> {
-        if self.maybe_pop_bracket()? {
-            return Ok(None);
-        }
-        self.maybe_read_comma()?;
-        // Check again for tailing comma.
-        if self.maybe_pop_bracket()? {
+        if self.check_end_of_container()? {
             return Ok(None);
         }
         seed.deserialize(&mut **self).map(Some)
