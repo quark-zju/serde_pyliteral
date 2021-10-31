@@ -2,7 +2,7 @@
 name = "serde_pyliteral"
 version = "0.1.0"
 authors = ["Jun Wu <quark@lihdd.net>"]
-edition = "2021"
+edition = "2018"
 
 [dependencies]
 serde = { version = "1" }
