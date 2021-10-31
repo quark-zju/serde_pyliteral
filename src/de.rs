@@ -123,7 +123,7 @@ impl<R: Read> Deserializer<R> {
                 }
                 b if b == s.quote => {
                     s.parsing = ParsingState::Closed;
-                    Ok(false)
+                    Ok(true)
                 }
                 _ => {
                     s.out.push(b);
@@ -239,7 +239,7 @@ impl<R: Read> Deserializer<R> {
                 }
                 b if b == s.quote => {
                     s.parsing = ParsingState::Closed;
-                    Ok(false)
+                    Ok(true)
                 }
                 _ => {
                     s.out.push(b);
