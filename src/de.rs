@@ -412,12 +412,32 @@ impl<R: Read> Deserializer<R> {
         // Check again after tailing comma.
         self.maybe_pop_bracket()
     }
+
+    fn debug(&mut self, label: &'static str) {
+        if cfg!(test) && cfg!(debug_assertions) {
+            let brackets = self
+                .stack
+                .iter()
+                .map(|f| f.right_bracket)
+                .collect::<Vec<u8>>();
+            let mut buf = vec![b' '; 10];
+            self.peek(&mut buf).unwrap();
+            eprintln!(
+                "{:22} STACK: '{}' PEEK: '{}'",
+                label,
+                String::from_utf8(brackets).unwrap(),
+                String::from_utf8(buf).unwrap(),
+            );
+        }
+        let _ = label;
+    }
 }
 
 impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     type Error = Error;
 
     fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_any");
         match self.peek_byte()?.unwrap_or(b' ') {
             b'[' => self.deserialize_seq(visitor),
             b'{' => self.deserialize_map(visitor),
@@ -433,6 +453,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_bool<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_bool");
         self.skip_spaces_and_comments()?;
         let mut buf = vec![0; 5];
         let v: V::Value;
@@ -460,6 +481,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     for t in "i8 i16 i32 i64 u8 u16 u32 u64".split():
         cog.out(f"""
     fn deserialize_{t}<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {{
+        self.debug("deserialize_{t}");
         let s = self.read_int_string()?;
         if s.is_empty() {{
             return self.type_mismatch("number");
@@ -471,6 +493,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     ]]] */
 
     fn deserialize_i8<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_i8");
         let s = self.read_int_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
@@ -480,6 +503,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_i16<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_i16");
         let s = self.read_int_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
@@ -489,6 +513,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_i32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_i32");
         let s = self.read_int_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
@@ -498,6 +523,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_i64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_i64");
         let s = self.read_int_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
@@ -507,6 +533,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_u8<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_u8");
         let s = self.read_int_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
@@ -516,6 +543,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_u16<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_u16");
         let s = self.read_int_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
@@ -525,6 +553,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_u32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_u32");
         let s = self.read_int_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
@@ -534,6 +563,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_u64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_u64");
         let s = self.read_int_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
@@ -552,6 +582,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_char<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_char");
         let s = self.read_string()?;
         let chars: Vec<char> = s.chars().take(2).collect();
         if chars.len() != 1 {
@@ -562,24 +593,29 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_str<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_str");
         self.deserialize_string(visitor)
     }
 
     fn deserialize_string<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_string");
         let s = self.read_string()?;
         visitor.visit_string(s)
     }
 
     fn deserialize_bytes<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_bytes");
         self.deserialize_byte_buf(visitor)
     }
 
     fn deserialize_byte_buf<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_byte_buf");
         let v = self.read_bytes()?;
         visitor.visit_byte_buf(v)
     }
 
     fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_option");
         self.skip_spaces_and_comments()?;
         let mut buf = vec![0; 4];
         self.peek(&mut buf)?;
@@ -592,6 +628,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_unit<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_unit");
         self.read_unit()?;
         visitor.visit_unit()
     }
@@ -601,6 +638,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
         _name: &'static str,
         visitor: V,
     ) -> Result<V::Value> {
+        self.debug("deserialize_unit_struct");
         self.deserialize_unit(visitor)
     }
 
@@ -609,6 +647,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
         _name: &'static str,
         visitor: V,
     ) -> Result<V::Value> {
+        self.debug("deserialize_newtype_struct");
         visitor.visit_newtype_struct(self)
     }
 
@@ -634,6 +673,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
         len: usize,
         visitor: V,
     ) -> Result<V::Value> {
+        self.debug("deserialize_tuple_struct");
         todo!()
     }
 
@@ -651,7 +691,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
         fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value> {
-        todo!()
+        self.debug("deserialize_struct");
     }
 
     fn deserialize_enum<V: Visitor<'de>>(
@@ -660,14 +700,17 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
         variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value> {
+        self.debug("deserialize_enum");
         todo!()
     }
 
     fn deserialize_identifier<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_identifier");
         self.deserialize_str(visitor)
     }
 
     fn deserialize_ignored_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_ignored_any");
         self.deserialize_any(visitor)
     }
 }
@@ -687,6 +730,7 @@ impl<'de, 'a, R: Read> de::SeqAccess<'de> for &'a mut Deserializer<R> {
         &mut self,
         seed: T,
     ) -> Result<Option<T::Value>> {
+        self.debug("next_element_seed");
         if self.check_end_of_container()? {
             return Ok(None);
         }
@@ -698,6 +742,7 @@ impl<'de, 'a, R: Read> de::MapAccess<'de> for &'a mut Deserializer<R> {
     type Error = Error;
 
     fn next_key_seed<K: de::DeserializeSeed<'de>>(&mut self, seed: K) -> Result<Option<K::Value>> {
+        self.debug("next_key_seed");
         if self.check_end_of_container()? {
             return Ok(None);
         }
@@ -705,6 +750,7 @@ impl<'de, 'a, R: Read> de::MapAccess<'de> for &'a mut Deserializer<R> {
     }
 
     fn next_value_seed<V: de::DeserializeSeed<'de>>(&mut self, seed: V) -> Result<V::Value> {
+        self.debug("next_value_seed");
         if self.peek_byte()? == Some(b':') {
             self.skip(1)?;
         } else {
