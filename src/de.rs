@@ -442,19 +442,21 @@ impl<R: Read> Deserializer<R> {
 
     fn debug(&mut self, label: &'static str) {
         if cfg!(test) && cfg!(debug_assertions) {
-            let brackets = self
-                .stack
-                .iter()
-                .map(|f| f.right_bracket)
-                .collect::<Vec<u8>>();
-            let mut buf = vec![b' '; 10];
-            self.peek(&mut buf).unwrap();
-            eprintln!(
-                "{:22} STACK: '{}' PEEK: '{}'",
-                label,
-                String::from_utf8(brackets).unwrap(),
-                String::from_utf8(buf).unwrap(),
-            );
+            if std::env::var_os("DEBUG").is_some() {
+                let brackets = self
+                    .stack
+                    .iter()
+                    .map(|f| f.right_bracket)
+                    .collect::<Vec<u8>>();
+                let mut buf = vec![b' '; 10];
+                self.peek(&mut buf).unwrap();
+                eprintln!(
+                    "{:22} STACK: '{}' PEEK: '{}'",
+                    label,
+                    String::from_utf8(brackets).unwrap(),
+                    String::from_utf8_lossy(&buf),
+                );
+            }
         }
         let _ = label;
     }
