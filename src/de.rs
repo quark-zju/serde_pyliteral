@@ -637,8 +637,12 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
         todo!()
     }
 
-    fn deserialize_map<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        todo!()
+    fn deserialize_map<V: Visitor<'de>>(mut self, visitor: V) -> Result<V::Value> {
+        if self.maybe_push_bracket(b'{', b'}')? {
+            visitor.visit_map(&mut self)
+        } else {
+            self.type_mismatch("map")
+        }
     }
 
     fn deserialize_struct<V: Visitor<'de>>(
@@ -687,5 +691,25 @@ impl<'de, 'a, R: Read> de::SeqAccess<'de> for &'a mut Deserializer<R> {
             return Ok(None);
         }
         seed.deserialize(&mut **self).map(Some)
+    }
+}
+
+impl<'de, 'a, R: Read> de::MapAccess<'de> for &'a mut Deserializer<R> {
+    type Error = Error;
+
+    fn next_key_seed<K: de::DeserializeSeed<'de>>(&mut self, seed: K) -> Result<Option<K::Value>> {
+        if self.check_end_of_container()? {
+            return Ok(None);
+        }
+        seed.deserialize(&mut **self).map(Some)
+    }
+
+    fn next_value_seed<V: de::DeserializeSeed<'de>>(&mut self, seed: V) -> Result<V::Value> {
+        if self.peek_byte()? == Some(b':') {
+            self.skip(1)?;
+        } else {
+            return self.type_mismatch("colon");
+        }
+        seed.deserialize(&mut **self)
     }
 }

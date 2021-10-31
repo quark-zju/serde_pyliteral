@@ -218,6 +218,12 @@ fn test_deserialize_any() {
 
     let v: Value = d("(1, (2, 3), (4,),)");
     assert_eq!(v.to_string(), "[1,[2,3],[4]]");
+
+    let v: Value = d("{}");
+    assert_eq!(v.to_string(), "{}");
+
+    let v: Value = d("{'a': 1, 'b': False,}");
+    assert_eq!(v.to_string(), "{\"a\":1,\"b\":false}");
 }
 
 #[test]
@@ -230,4 +236,13 @@ fn test_deserialize_list() {
 
     let v: Vec<Vec<u8>> = d(r#"[[3,4,],[5],[]]"#);
     assert_eq!(v, [vec![3, 4], vec![5], vec![]]);
+}
+
+#[test]
+fn test_deserialize_map() {
+    let v: BTreeMap<u8, u8> = d("{1:2,3 : 4 }");
+    assert_eq!(format!("{:?}", v), "{1: 2, 3: 4}");
+
+    let v: BTreeMap<Vec<bool>, String> = d("{(True,):'a', (False,True):'b'}");
+    assert_eq!(format!("{:?}", v), "{[false, true]: \"b\", [true]: \"a\"}");
 }
