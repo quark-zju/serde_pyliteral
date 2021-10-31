@@ -437,10 +437,10 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
         let mut buf = vec![0; 5];
         let v: V::Value;
         self.peek(&mut buf)?;
-        if buf.get(..4) == Some(b"True") {
+        if let Some(b"True") | Some(b"true") = buf.get(..4) {
             v = visitor.visit_bool::<Error>(true)?;
             self.skip(4)?;
-        } else if buf.get(..5) == Some(b"False") {
+        } else if let Some(b"False") | Some(b"false") = buf.get(..5) {
             v = visitor.visit_bool::<Error>(false)?;
             self.skip(5)?;
         } else if buf.get(0) == Some(&b'1') {
@@ -583,7 +583,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
         self.skip_spaces_and_comments()?;
         let mut buf = vec![0; 4];
         self.peek(&mut buf)?;
-        if buf == b"None" {
+        if buf == b"None" || buf == b"null" {
             self.skip(4)?;
             visitor.visit_none()
         } else {
