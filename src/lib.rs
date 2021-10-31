@@ -1,5 +1,6 @@
 pub mod de;
 pub mod error;
+mod peek;
 pub mod ser;
 mod unicode;
 
