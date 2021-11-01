@@ -1,5 +1,5 @@
 use crate::error::unsupported;
-use crate::unicode::is_printable_or_space;
+use crate::unicode;
 use crate::Error;
 use crate::Result;
 use serde::ser::SerializeMap;
@@ -546,7 +546,7 @@ fn write_escaped_string(value: &str, out: &mut impl io::Write) -> io::Result<()>
             '\r' => br"\r",
             '\t' => br"\t",
             _ => {
-                if !is_printable_or_space(ch) {
+                if unicode::need_escape(ch) {
                     // Use \uxxxx or \Uxxxxxxxx to escape.
                     out.write_all(state.pending(i))?;
                     let v = ch as u32;
