@@ -52,8 +52,8 @@ impl<R: Read> PeekRead<R> {
             if buf.is_empty() {
                 break;
             }
-            for (i, b) in buf.iter().enumerate() {
-                if predicate(*b, &mut result)? {
+            for &b in buf.iter() {
+                if predicate(b, &mut result)? {
                     // predicate accepts the byte.
                     self.skip(1)?;
                 } else {

@@ -606,11 +606,11 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
     /* [[[end]]] */
 
-    fn deserialize_f32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+    fn deserialize_f32<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
         unsupported("deserialize_f32")
     }
 
-    fn deserialize_f64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+    fn deserialize_f64<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
         unsupported("deserialize_f64")
     }
 
@@ -708,7 +708,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
 
     fn deserialize_tuple_struct<V: Visitor<'de>>(
         self,
-        name: &'static str,
+        _name: &'static str,
         len: usize,
         visitor: V,
     ) -> Result<V::Value> {
@@ -737,8 +737,8 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
 
     fn deserialize_enum<V: Visitor<'de>>(
         self,
-        name: &'static str,
-        variants: &'static [&'static str],
+        _name: &'static str,
+        _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value> {
         self.debug("deserialize_enum");
