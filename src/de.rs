@@ -76,14 +76,22 @@ impl<R: Read> Deserializer<R> {
         Ok(v.into_iter().next())
     }
 
-    fn read_int_string(&mut self) -> crate::Result<String> {
+    fn read_number_string(&mut self) -> crate::Result<String> {
         self.skip_spaces_and_comments()?;
         self.read_while(|b, s: &mut String| {
-            if s.is_empty() && (b == b'+' || b == b'-') {
+            if (b == b'+' || b == b'-') && (s.is_empty() || s.ends_with('e')) {
                 s.push(b as char);
                 Ok(true)
             } else if b >= b'0' && b <= b'9' {
                 s.push(b as char);
+                Ok(true)
+            } else if b == b'e' && !s.contains('e') {
+                s.push(b as char);
+                Ok(true)
+            } else if b == b'.' && !s.contains('.') && !s.contains('e') {
+                s.push(b as char);
+                Ok(true)
+            } else if b == b'_' {
                 Ok(true)
             } else {
                 Ok(false)
@@ -585,11 +593,11 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
 
     /* [[[cog
     import cog
-    for t in "i8 i16 i32 i64 u8 u16 u32 u64".split():
+    for t in "i8 i16 i32 i64 u8 u16 u32 u64 f32 f64".split():
         cog.out(f"""
     fn deserialize_{t}<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {{
         self.debug("deserialize_{t}");
-        let s = self.read_int_string()?;
+        let s = self.read_number_string()?;
         if s.is_empty() {{
             return self.type_mismatch("number");
         }}
@@ -601,7 +609,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
 
     fn deserialize_i8<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.debug("deserialize_i8");
-        let s = self.read_int_string()?;
+        let s = self.read_number_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
         }
@@ -611,7 +619,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
 
     fn deserialize_i16<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.debug("deserialize_i16");
-        let s = self.read_int_string()?;
+        let s = self.read_number_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
         }
@@ -621,7 +629,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
 
     fn deserialize_i32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.debug("deserialize_i32");
-        let s = self.read_int_string()?;
+        let s = self.read_number_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
         }
@@ -631,7 +639,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
 
     fn deserialize_i64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.debug("deserialize_i64");
-        let s = self.read_int_string()?;
+        let s = self.read_number_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
         }
@@ -641,7 +649,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
 
     fn deserialize_u8<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.debug("deserialize_u8");
-        let s = self.read_int_string()?;
+        let s = self.read_number_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
         }
@@ -651,7 +659,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
 
     fn deserialize_u16<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.debug("deserialize_u16");
-        let s = self.read_int_string()?;
+        let s = self.read_number_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
         }
@@ -661,7 +669,7 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
 
     fn deserialize_u32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.debug("deserialize_u32");
-        let s = self.read_int_string()?;
+        let s = self.read_number_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
         }
@@ -671,22 +679,34 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
 
     fn deserialize_u64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.debug("deserialize_u64");
-        let s = self.read_int_string()?;
+        let s = self.read_number_string()?;
         if s.is_empty() {
             return self.type_mismatch("number");
         }
         let i = s.parse::<u64>()?;
         visitor.visit_u64(i)
     }
+
+    fn deserialize_f32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_f32");
+        let s = self.read_number_string()?;
+        if s.is_empty() {
+            return self.type_mismatch("number");
+        }
+        let i = s.parse::<f32>()?;
+        visitor.visit_f32(i)
+    }
+
+    fn deserialize_f64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.debug("deserialize_f64");
+        let s = self.read_number_string()?;
+        if s.is_empty() {
+            return self.type_mismatch("number");
+        }
+        let i = s.parse::<f64>()?;
+        visitor.visit_f64(i)
+    }
     /* [[[end]]] */
-
-    fn deserialize_f32<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        unsupported("deserialize_f32")
-    }
-
-    fn deserialize_f64<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        unsupported("deserialize_f64")
-    }
 
     fn deserialize_char<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.debug("deserialize_char");

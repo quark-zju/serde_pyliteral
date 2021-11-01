@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::fmt;
+use std::num::ParseFloatError;
 use std::num::ParseIntError;
 use thiserror::Error;
 
@@ -12,7 +13,10 @@ pub enum Error {
     TypeMismatch(&'static str, Cow<'static, str>),
 
     #[error(transparent)]
-    ParseNumber(#[from] ParseIntError),
+    ParseInt(#[from] ParseIntError),
+
+    #[error(transparent)]
+    ParseFloat(#[from] ParseFloatError),
 
     #[error("cannot parse string: {0}")]
     ParseString(Cow<'static, str>),

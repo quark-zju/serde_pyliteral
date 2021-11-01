@@ -192,6 +192,12 @@ fn test_deserialize_basic() {
     let v: i64 = d("-9223372036854775801");
     assert_eq!(v, -9223372036854775801);
 
+    let v: f32 = d("-0.5");
+    assert_eq!(v, -0.5);
+
+    let v: f64 = d("1e100");
+    assert_eq!(v, 1e100);
+
     let v: Option<bool> = d("True");
     assert_eq!(v, Some(true));
     let v: Option<bool> = d("False");
