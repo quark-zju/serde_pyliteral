@@ -422,7 +422,11 @@ impl<R: Read> Deserializer<R> {
 
     /// Force read till the end of a container.
     fn force_end_container(&mut self) -> crate::Result<()> {
-        while !self.check_end_of_container()? {
+        while !self.maybe_pop_bracket()? {
+            let b = self.peek_byte()?.unwrap_or(b' ');
+            if b == b':' || b == b',' {
+                self.skip(1)?;
+            }
             self.deserialize_ignored_any(de::IgnoredAny)?;
         }
         Ok(())
