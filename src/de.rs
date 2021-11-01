@@ -335,7 +335,8 @@ impl<R: Read> Deserializer<R> {
     }
 
     fn peek_type(&mut self) -> Result<PeekType> {
-        let peek_type = match self.peek_byte()?.unwrap_or(0) {
+        let b = self.peek_byte()?.unwrap_or(0);
+        let peek_type = match b {
             0 => PeekType::Eof,
             b'[' => PeekType::List,
             b'{' => PeekType::Map,
@@ -343,8 +344,15 @@ impl<R: Read> Deserializer<R> {
             b'\'' | b'"' => PeekType::Str,
             b'b' => PeekType::Bytes,
             b'T' | b'F' | b't' | b'f' => PeekType::Bool,
-            b'0'..=b'9' | b'+' => PeekType::UnsignedInt,
-            b'-' => PeekType::SignedInt,
+            b'0'..=b'9' | b'+' | b'-' => {
+                if self.peek_is_float_or_int()? {
+                    PeekType::Float
+                } else if b == b'-' {
+                    PeekType::SignedInt
+                } else {
+                    PeekType::UnsignedInt
+                }
+            }
             b'N' => PeekType::None,
             _ => {
                 let mut v = vec![b' '; 10];
@@ -353,6 +361,22 @@ impl<R: Read> Deserializer<R> {
             }
         };
         Ok(peek_type)
+    }
+
+    /// Check if a number is float or int.
+    /// Return `true` for float, `false` for int.
+    fn peek_is_float_or_int(&mut self) -> Result<bool> {
+        // 32-char is enough to hold u64::MAX.
+        let mut v = vec![0u8; 32];
+        self.peek(&mut v)?;
+        for b in v {
+            match b {
+                b'e' | b'.' => return Ok(true),
+                b'0'..=b'9' | b'_' | b'+' | b'-' => continue,
+                _ => return Ok(false),
+            }
+        }
+        Ok(false)
     }
 
     /// Raise a TypeMismatch error.
