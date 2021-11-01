@@ -40,6 +40,4 @@ Output:
  "data": b"\xe6\x95\xb0\xe6\x8d\xae"}
 ```
 
-The `name` field preserves the printable unicode characters for easier reading, and changes the escaping syntax from Rust (`\u{2029}`) to Python (`\u2029`).
-
 At present, this library focuses on simplicity and correctness (must round-trip, and must generate valid Python code). Performance hasn't been a priority.
