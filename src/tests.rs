@@ -291,3 +291,33 @@ fn test_deserialize_struct() {
     }"#);
     assert_eq!(a, b);
 }
+
+#[test]
+fn test_deserialize_enum() {
+    #[derive(Deserialize, Eq, PartialEq, Debug)]
+    struct D;
+
+    #[derive(Deserialize, Eq, PartialEq, Debug)]
+    enum A {
+        A,
+        B(u32),
+        C(u32, u32),
+        D(D),
+        E { a: u32, b: u32 },
+    }
+
+    let v: A = d("{'A':()}");
+    assert_eq!(v, A::A);
+
+    let v: A = d("{'B':1}");
+    assert_eq!(v, A::B(1));
+
+    let v: A = d("{'C':(1,2)}");
+    assert_eq!(v, A::C(1, 2));
+
+    let v: A = d("{'D':()}");
+    assert_eq!(v, A::D(D));
+
+    let v: A = d("{'E':{'a':1,'b':2}}");
+    assert_eq!(v, A::E { a: 1, b: 2 });
+}

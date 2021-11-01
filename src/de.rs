@@ -4,6 +4,7 @@ use crate::Error;
 use crate::Result;
 use serde::de;
 use serde::de::Deserializer as _;
+use serde::de::IntoDeserializer;
 use serde::de::Visitor;
 use std::borrow::Cow;
 use std::io;
@@ -741,7 +742,19 @@ impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
         visitor: V,
     ) -> Result<V::Value> {
         self.debug("deserialize_enum");
-        todo!()
+        if self.maybe_push_bracket(b'{', b'}', None)? {
+            // Map variant {'field': value}
+            visitor.visit_enum(&mut *self)
+        } else {
+            let b = self.peek_byte()?;
+            if b == Some(b'"') || b == Some(b'\'') {
+                // String for unit variant.
+                let name = self.read_string()?;
+                visitor.visit_enum(name.into_deserializer())
+            } else {
+                self.type_mismatch("enum")
+            }
+        }
     }
 
     fn deserialize_identifier<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
@@ -803,5 +816,61 @@ impl<'de, 'a, R: Read> de::MapAccess<'de> for &'a mut Deserializer<R> {
             return self.type_mismatch("colon");
         }
         seed.deserialize(&mut **self)
+    }
+}
+
+impl<'de, 'a, R: Read> de::EnumAccess<'de> for &'a mut Deserializer<R> {
+    type Error = Error;
+    type Variant = Self;
+
+    fn variant_seed<V: de::DeserializeSeed<'de>>(
+        self,
+        seed: V,
+    ) -> Result<(V::Value, Self::Variant)> {
+        self.debug("variant_seed");
+        let key = seed.deserialize(&mut *self)?;
+        if self.peek_byte()? == Some(b':') {
+            self.skip(1)?;
+            Ok((key, self))
+        } else {
+            self.type_mismatch("colon")
+        }
+    }
+}
+
+impl<'de, 'a, R: Read> de::VariantAccess<'de> for &'a mut Deserializer<R> {
+    type Error = Error;
+
+    fn unit_variant(self) -> Result<()> {
+        self.debug("unit_variant");
+        self.read_unit()?;
+        self.force_end_container()
+    }
+
+    fn newtype_variant_seed<T: de::DeserializeSeed<'de>>(self, seed: T) -> Result<T::Value> {
+        self.debug("newtype_variant_seed");
+        let v = seed.deserialize(&mut *self)?;
+        self.force_end_container()?;
+        Ok(v)
+    }
+
+    // { field: (value, value, ...) }
+    fn tuple_variant<V: Visitor<'de>>(self, len: usize, visitor: V) -> Result<V::Value> {
+        self.debug("tuple_variant");
+        let v = de::Deserializer::deserialize_tuple(&mut *self, len, visitor)?;
+        self.force_end_container()?;
+        Ok(v)
+    }
+
+    // { field: { field: value, field: value, ...} }
+    fn struct_variant<V: Visitor<'de>>(
+        self,
+        _fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value> {
+        self.debug("struct_variant");
+        let v = de::Deserializer::deserialize_map(&mut *self, visitor)?;
+        self.force_end_container()?;
+        Ok(v)
     }
 }
