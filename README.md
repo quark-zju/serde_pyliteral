@@ -5,6 +5,7 @@ Serialize data to Python code that can be deserialized by [`ast.literal_eval`](h
 This could be interesting if you want a format that:
 - looks friendly for human eyes (not CBOR).
 - supports non-utf8 binary data or non-string map keys (not JSON).
+- is widely known, not defined by a single implementation.
 
 Serialization can use a "pretty" format optionally. The pretty format is inspired by [`pprint`](https://docs.python.org/3/library/pprint.html).
 
