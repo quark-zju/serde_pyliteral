@@ -40,4 +40,4 @@ Output:
  "data": b"\xe6\x95\xb0\xe6\x8d\xae"}
 ```
 
-Deserialization is only guaranteed to work for output generated from serialization by this library. Deserialization does not match all `ast.literal_eval` features.
+Deserialization is only guaranteed to work for output generated from serialization by this library. Deserialization is not intended to match all `ast.literal_eval` features.
