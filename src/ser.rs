@@ -1,4 +1,4 @@
-use crate::error::unsupported;
+use crate::ieee754::IeeeFloat;
 use crate::unicode;
 use crate::Error;
 use crate::Result;
@@ -260,14 +260,30 @@ impl<'a, W: Write> serde::Serializer for &'a mut Serializer<W> {
         self.write_str(v)
     }
 
-    #[inline]
-    fn serialize_f32(self, _v: f32) -> Result<()> {
-        unsupported("serialize_f32")
+    fn serialize_f32(self, v: f32) -> Result<()> {
+        if v.is_nan() {
+            Err(Error::NaN)
+        } else if v.is_infinite() {
+            if v.is_sign_negative() {
+                self.write_raw_bytes(b"-")?;
+            }
+            self.write_raw_bytes(b"1e999")
+        } else {
+            self.write_raw_bytes(v.to_human_string().as_bytes())
+        }
     }
 
-    #[inline]
-    fn serialize_f64(self, _v: f64) -> Result<()> {
-        unsupported("serialize_f64")
+    fn serialize_f64(self, v: f64) -> Result<()> {
+        if v.is_nan() {
+            Err(Error::NaN)
+        } else if v.is_infinite() {
+            if v.is_sign_negative() {
+                self.write_raw_bytes(b"-")?;
+            }
+            self.write_raw_bytes(b"1e999")
+        } else {
+            self.write_raw_bytes(v.to_human_string().as_bytes())
+        }
     }
 
     #[inline]

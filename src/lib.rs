@@ -1,5 +1,6 @@
 pub mod de;
 pub mod error;
+mod ieee754;
 mod peek;
 pub mod ser;
 mod unicode;

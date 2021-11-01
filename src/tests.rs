@@ -28,6 +28,15 @@ fn d<T: de::DeserializeOwned>(s: &str) -> T {
 #[test]
 fn test_serialize_basic_types() {
     assert_eq!(s(&42), "42");
+
+    assert_eq!(s(&12345f32), "12345.");
+    assert_eq!(s(&0.005f32), "0.005");
+    assert_eq!(s(&-1e50f64), "-1e50");
+    assert_eq!(s(&(1f32 / 3f32)), "0.33333334");
+    assert_eq!(s(&(1f64 / 3f64)), "0.3333333333333333");
+    assert_eq!(s(&(f32::MAX * 2.0)), "1e999"); // inf
+    assert_eq!(s(&f64::MIN), "-1.7976931348623157e308");
+
     assert_eq!(s(&'"'), "'\"'");
     assert_eq!(s(&"汉字abc\u{f234}"), r#""汉字abc\uf234""#);
 

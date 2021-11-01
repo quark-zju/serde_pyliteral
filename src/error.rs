@@ -23,6 +23,9 @@ pub enum Error {
     #[error("cannot auto-detect type: {0}")]
     ParseAny(char),
 
+    #[error("cannot serialize nan")]
+    NaN,
+
     #[error("{0} is not supported")]
     Unsupported(&'static str),
 
