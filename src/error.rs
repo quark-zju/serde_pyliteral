@@ -20,8 +20,8 @@ pub enum Error {
     #[error("cannot parse bytes: {0}")]
     ParseBytes(Cow<'static, str>),
 
-    #[error("cannot auto-detect type: {0}")]
-    ParseAny(char),
+    #[error("cannot auto-detect type: {0:?}")]
+    ParseAny(String),
 
     #[error("cannot serialize nan")]
     NaN,

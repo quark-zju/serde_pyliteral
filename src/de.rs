@@ -334,21 +334,31 @@ impl<R: Read> Deserializer<R> {
         Ok(())
     }
 
+    fn peek_type(&mut self) -> Result<PeekType> {
+        let peek_type = match self.peek_byte()?.unwrap_or(0) {
+            0 => PeekType::Eof,
+            b'[' => PeekType::List,
+            b'{' => PeekType::Map,
+            b'(' => PeekType::Tuple,
+            b'\'' | b'"' => PeekType::Str,
+            b'b' => PeekType::Bytes,
+            b'T' | b'F' | b't' | b'f' => PeekType::Bool,
+            b'0'..=b'9' | b'+' => PeekType::UnsignedInt,
+            b'-' => PeekType::SignedInt,
+            b'N' => PeekType::None,
+            _ => {
+                let mut v = vec![b' '; 10];
+                self.peek(&mut v)?;
+                PeekType::Unknown(String::from_utf8_lossy(&v).to_string())
+            }
+        };
+        Ok(peek_type)
+    }
+
     /// Raise a TypeMismatch error.
     fn type_mismatch<T>(&mut self, expected: &'static str) -> Result<T> {
-        let got: Cow<str> = match self.peek_byte()?.unwrap_or(0) {
-            0 => "eof".into(),
-            b'[' => "list".into(),
-            b'{' => "map".into(),
-            b'(' => "tuple".into(),
-            b'\'' | b'"' => "str".into(),
-            b'b' => "bytes".into(),
-            b'T' | b'F' => "bool".into(),
-            b'0'..=b'9' | b'+' | b'-' => "number".into(),
-            b'N' => "None".into(),
-            b => format!("unknown type ({})", b as char).into(),
-        };
-        Err(Error::TypeMismatch(expected, got))
+        let got = self.peek_type()?;
+        Err(Error::TypeMismatch(expected, got.to_cow_str()))
     }
 
     /// Push a frame if bracket matches. Return true if a frame is pushed.
@@ -466,22 +476,62 @@ impl<R: Read> Deserializer<R> {
     }
 }
 
+#[derive(Debug)]
+enum PeekType {
+    Eof,
+    List,
+    Map,
+    Tuple,
+    Str,
+    Bytes,
+    Bool,
+    SignedInt,
+    UnsignedInt,
+    Float,
+    None,
+    Unknown(String),
+}
+
+impl PeekType {
+    fn to_cow_str(&self) -> Cow<'static, str> {
+        use PeekType::*;
+        match self {
+            Eof => "end",
+            List => "list",
+            Map => "map",
+            Tuple => "tuple",
+            Str => "str",
+            Bytes => "bytes",
+            Bool => "bool",
+            SignedInt | UnsignedInt => "int",
+            Float => "float",
+            None => "None",
+            Unknown(s) => {
+                return format!("unknown type ({:?})", s).into();
+            }
+        }
+        .into()
+    }
+}
+
 impl<'de, 'a, R: Read> de::Deserializer<'de> for &'a mut Deserializer<R> {
     type Error = Error;
 
     fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.debug("deserialize_any");
-        match self.peek_byte()?.unwrap_or(b' ') {
-            b'[' => self.deserialize_seq(visitor),
-            b'{' => self.deserialize_map(visitor),
-            b'(' => self.deserialize_seq(visitor),
-            b'\'' | b'"' => self.deserialize_str(visitor),
-            b'b' => self.deserialize_bytes(visitor),
-            b'T' | b'F' => self.deserialize_bool(visitor),
-            b'0'..=b'9' => self.deserialize_u64(visitor),
-            b'-' => self.deserialize_i64(visitor),
-            b'N' => self.deserialize_option(visitor),
-            b => Err(Error::ParseAny(b as char)),
+        use PeekType::*;
+        match self.peek_type()? {
+            List | Tuple => self.deserialize_seq(visitor),
+            Map => self.deserialize_map(visitor),
+            Str => self.deserialize_str(visitor),
+            Bytes => self.deserialize_bytes(visitor),
+            Bool => self.deserialize_bool(visitor),
+            UnsignedInt => self.deserialize_u64(visitor),
+            SignedInt => self.deserialize_i64(visitor),
+            Float => self.deserialize_f64(visitor),
+            None => self.deserialize_option(visitor),
+            Eof => Err(Error::ParseAny(String::new())),
+            Unknown(s) => Err(Error::ParseAny(s)),
         }
     }
 
