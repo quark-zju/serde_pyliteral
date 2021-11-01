@@ -1,4 +1,3 @@
-use crate::error::unsupported;
 use crate::peek::PeekRead;
 use crate::Error;
 use crate::Result;
